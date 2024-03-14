@@ -1,26 +1,21 @@
-use std::io::Read;
 use error::Error;
+use std::io::Read;
 
 use html5ever::rcdom::NodeData::{
-    Document,
-    Doctype,
-    Text,
-    Comment,
-    Element,
-    ProcessingInstruction
+    Comment, Doctype, Document, Element, ProcessingInstruction, Text,
 };
-use html5ever::rcdom::{RcDom, Handle};
-use html5ever::{parse_document, Attribute};
+use html5ever::rcdom::{Handle, RcDom};
 use html5ever::tendril::TendrilSink;
+use html5ever::{parse_document, Attribute};
 
-#[cfg(feature = "reqwest")]
-use std::time::Duration;
 #[cfg(feature = "reqwest")]
 use reqwest;
+#[cfg(feature = "reqwest")]
+use std::time::Duration;
 
-use Object;
-use Image;
 use Audio;
+use Image;
+use Object;
 use Video;
 
 pub struct Opts {
@@ -47,11 +42,15 @@ pub fn scrape(url: &str, option: Opts) -> Result<Object, Error> {
     let mut res = client.get(url).send()?;
     if res.status().is_success() {
         extract(&mut res, option).map(|mut obj| {
-            obj.images = obj.images.iter().map(|i| {
-                let mut i = i.clone();
-                i.normalize(&res.url());
-                i
-            }).collect::<Vec<Image>>();
+            obj.images = obj
+                .images
+                .iter()
+                .map(|i| {
+                    let mut i = i.clone();
+                    i.normalize(&res.url());
+                    i
+                })
+                .collect::<Vec<Image>>();
             obj
         })
     } else {
@@ -59,21 +58,26 @@ pub fn scrape(url: &str, option: Opts) -> Result<Object, Error> {
     }
 }
 
-pub fn extract<R>(input: &mut R, option: Opts) -> Result<Object, Error> where R: Read {
+pub fn extract<R>(input: &mut R, option: Opts) -> Result<Object, Error>
+where
+    R: Read,
+{
     let dom = parse_document(RcDom::default(), Default::default())
         .from_utf8()
         .read_from(input)
         .unwrap();
     let mut og_props = Vec::new();
-    let mut images   = Vec::new();
-    let mut audios   = Vec::new();
-    let mut videos   = Vec::new();
-    walk(dom.document,
-         &mut og_props,
-         &mut images,
-         &mut audios,
-         &mut videos,
-         &option);
+    let mut images = Vec::new();
+    let mut audios = Vec::new();
+    let mut videos = Vec::new();
+    walk(
+        dom.document,
+        &mut og_props,
+        &mut images,
+        &mut audios,
+        &mut videos,
+        &option,
+    );
     let mut obj = Object::new(&og_props);
     obj.images.append(&mut images);
     obj.audios.append(&mut audios);
@@ -81,49 +85,55 @@ pub fn extract<R>(input: &mut R, option: Opts) -> Result<Object, Error> where R:
     Ok(obj)
 }
 
-fn walk(handle:    Handle,
-        og_props:  &mut Vec<(String, String)>,
-        images:    &mut Vec<Image>,
-        audios:    &mut Vec<Audio>,
-        videos:    &mut Vec<Video>,
-        option:    &Opts) {
+fn walk(
+    handle: Handle,
+    og_props: &mut Vec<(String, String)>,
+    images: &mut Vec<Image>,
+    audios: &mut Vec<Audio>,
+    videos: &mut Vec<Video>,
+    option: &Opts,
+) {
     match handle.data {
-        Document       => (),
+        Document => (),
         Doctype { .. } => (),
-        Text { .. }    => (),
+        Text { .. } => (),
         Comment { .. } => (),
-        Element { ref name, ref attrs, ..} => {
+        Element {
+            ref name,
+            ref attrs,
+            ..
+        } => {
             let tag_name = name.local.as_ref();
             match tag_name {
                 "meta" => {
                     let mut ps = extract_open_graph_from_meta_tag(&attrs.borrow());
                     og_props.append(&mut ps);
-                },
+                }
                 "img" => {
                     if option.include_images {
                         if let Some(image) = extract_image(&attrs.borrow()) {
                             images.push(image);
                         }
                     }
-                },
+                }
                 "audio" => {
                     if option.include_audios {
                         if let Some(audio) = extract_audio(&attrs.borrow()) {
                             audios.push(audio);
                         }
                     }
-                },
+                }
                 "video" => {
                     if option.include_videos {
                         if let Some(video) = extract_video(&attrs.borrow()) {
                             videos.push(video);
                         }
                     }
-                },
+                }
                 _ => (),
             }
-        },
-        ProcessingInstruction { .. } => unreachable!()
+        }
+        ProcessingInstruction { .. } => unreachable!(),
     }
     for child in handle.children.borrow().iter() {
         walk(child.clone(), og_props, images, audios, videos, option)
@@ -133,37 +143,38 @@ fn walk(handle:    Handle,
 fn attr(attr_name: &str, attrs: &Vec<Attribute>) -> Option<String> {
     for attr in attrs.iter() {
         if attr.name.local.as_ref() == attr_name {
-            return Some(attr.value.to_string())
+            return Some(attr.value.to_string());
         }
     }
     None
 }
 
 pub fn extract_open_graph_from_meta_tag(attrs: &Vec<Attribute>) -> Vec<(String, String)> {
-    let mut og_props = vec!();
+    let mut og_props = vec![];
     match extract_open_graph_prop("property", attrs) {
         Some((key, content)) => og_props.push((key, content)),
-        None                 => (),
+        None => (),
     }
     match extract_open_graph_prop("name", attrs) {
         Some((key, content)) => og_props.push((key, content)),
-        None                 => (),
+        None => (),
     }
     og_props
 }
 
-fn extract_open_graph_prop<'a>(attr_name: &str, attrs: &Vec<Attribute>) -> Option<(String, String)> {
-    attr(attr_name, attrs)
-        .and_then(|property|
-                  if property.starts_with("og:") {
-                      let end = property.chars().count();
-                      let key = unsafe {
-                          property.slice_unchecked(3, end)
-                      }.to_string();
-                      attr("content", attrs).map(|content| (key, content))
-                  } else {
-                      None
-                  })
+fn extract_open_graph_prop<'a>(
+    attr_name: &str,
+    attrs: &Vec<Attribute>,
+) -> Option<(String, String)> {
+    attr(attr_name, attrs).and_then(|property| {
+        if property.starts_with("og:") {
+            let end = property.chars().count();
+            let key = unsafe { property.get_unchecked(3..end) }.to_string();
+            attr("content", attrs).map(|content| (key, content))
+        } else {
+            None
+        }
+    })
 }
 
 pub fn extract_image(attrs: &Vec<Attribute>) -> Option<Image> {
@@ -202,6 +213,9 @@ mod test {
         assert_eq!(obj.obj_type, ObjectType::Movie);
         assert_eq!(&obj.url, "http://www.imdb.com/title/tt0117500/");
         assert_eq!(obj.images.len(), 1);
-        assert_eq!(&obj.images[0].url, "http://ia.media-imdb.com/images/rock.jpg");
+        assert_eq!(
+            &obj.images[0].url,
+            "http://ia.media-imdb.com/images/rock.jpg"
+        );
     }
 }

@@ -1,15 +1,15 @@
 [package]
 name = "opengraph"
-version = "0.2.4"
-authors = ["Hiroki Kumamoto <kumabook@live.jp>"]
+version = "0.2.5"
+authors = ["Jagan Veeraraghavan <iam@jagan.id>"]
 include = [
     "**/*.rs",
     "Cargo.toml",
 ]
 license = "MIT"
-homepage = "https://github.com/kumabook/opengraph"
-repository = "https://github.com/kumabook/opengraph.git"
-description = "Parses html and extracts Open Graph protocol markup"
+homepage = "https://github.com/iamjagan/opengraph"
+repository = "https://github.com/iamjagan/opengraph.git"
+description = "Parses html and extracts Open Graph protocol markup. Fork of https://github.com/kumabook/opengraph"
 keywords = ["opengraph"]
 categories = []
 
